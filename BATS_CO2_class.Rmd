@@ -106,3 +106,5 @@ view(bats_co2)
 #We will need to convert units scaling when using co2sys
 ```
 
+For the markdown do:
+Intro - methods - results - discussion mini-lab report
