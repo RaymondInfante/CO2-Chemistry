@@ -1,0 +1,108 @@
+---
+title: "BATS_CO2"
+author: "Raymond Infante"
+date: "2023-03-23"
+output: html_document
+---
+
+```{r setup, message=FALSE}
+#Load Required packages
+library(tidyverse)
+library(seacarb)
+
+#Import dataset
+#(2 dataset to column names)
+bats_bottle <- read_table("bats_bottle.txt", 
+    col_names = FALSE, skip = 60)
+bats_bottle_names <- read_csv("bats_bottle.txt", 
+    skip = 59)
+
+
+#Combine column names
+colnames(bats_bottle) <- colnames(bats_bottle_names) 
+
+
+#Check if the data and columns are correct
+view(bats_bottle)
+view(bats_bottle_names)
+
+```
+# Variables
+yyyymmdd = Year Month Day   
+decy   = Decimal Year     
+time   = Time (hhmm)      
+latN   = Latitude (Deg N) 
+lonW   = Longitude (Deg W)
+Depth  = Depth (m)                  
+Temp   = Temperature ITS-90 (C)    
+CTD_S  = CTD Salinity (PSS-78)      
+Sal1   = Salinity-1 (PSS-78)        
+Sig-th = Sigma-Theta (kg/m^3)       
+O2(1)  = Oxygen-1 (umol/kg)          
+OxFixT = Oxygen Fix Temp (C)        
+Anom1  = Oxy Anomaly-1 (umol/kg)    
+CO2    = dissolved inorganic carbon (umol/kg)              
+Alk    = Alkalinity (uequiv)        
+NO31   = Nitrate+Nitrite-1 (umol/kg)
+NO21   = Nitrite-1 (umol/kg)        
+PO41   = Phosphate-1 (umol/kg)      
+Si1    = Silicate-1 (umol/kg)       
+POC    = POC (ug/kg)                
+PON    = PON (ug/kg)                
+TOC    = TOC (umol/kg)                
+TN     = TN (umol/kg)  
+Bact   = Bacteria enumeration (cells*10^8/kg)   
+POP    = POP (umol/kg)
+TDP    = Total dissolved Phosphorus (nmol/kg)
+SRP    = Low-level phosphorus (nmol/kg)
+BSi    = Particulate biogenic silica (umol/kg)
+LSi    = Particulate lithogenic silica  (umol/kg)
+Pro    = Prochlorococcus (cells/ml)
+Syn    = Synechococcus (cells/ml)
+Piceu  = Picoeukaryotes (cells/ml)
+Naneu  = Nanoeukaryotes (cells/ml)
+/Quality flags
+-999 = Missing or bad data
+ 0 = Less than detection limit
+
+
+
+# Class questions
+Can we quantify ocean acidification in the subtropical North Atlantic Ocean
+
+1) Is surface ocean pco2 increasing?
+2) Is surface ocean seawater ph decreasing?
+3) Is surface ocean seawater saturation state with respect to arragonite decreasing? 
+
+
+```{r, echo=FALSE, message=FALSE, error=FALSE}
+?carb
+#carb(flag, var1, var2, S=35, T=25, Patm=1, P=0, Pt=0, Sit=0,
+       # k1k2="x", kf="x", ks="d", pHscale="T", b="u74", gas="potential", 
+        #warn="y", eos="eos80", long=1.e20, lat=1.e20)
+
+#In the data we have TA, DIC (CO2), S, T, PT, sit ,but we dont have pressure
+
+#First calculate pressure using TEOS-10
+
+?gsw
+# gsw_p_from_z(z,lat) (Pressures is going to be in dbar)
+
+bats_co2 = bats_bottle %>% 
+  mutate(P_gsw_dbar = gsw_p_from_z(Depth*-1, latN))
+view(bats_co2)
+#we now have all of the variables that we need to calculate the surface water chemistry at the BATS station, but that we need to be very careful about our units. 
+
+# we now have In the data we have TA, DIC (CO2), S, T, PT, sit and pressure
+#What are the units of these and waht does co2sys need?
+#TA (uequiv) = umol/kg and we need mol/kg ****
+#DIC = umol/kg, we need mol/kg *****
+#S = is Practical Salinity and we will use EOS80
+#T = is in °C
+#Pt = umol/kg, we need mol/kg ******
+#siT = umol/kg, we need mol/kg *****
+#P_dbar = dbar, we need bar ********
+
+#We will need to convert units scaling when using co2sys
+```
+
