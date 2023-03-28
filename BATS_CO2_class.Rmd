@@ -143,6 +143,13 @@ bats_co2sys_surface %>%
 pco2_model = lm(pCO2insitu~decy, data = bats_co2sys_surface)
 summary(pco2_model)
 
+#For Homework:
+#Make decy vs pco2 plot pretty
+#Could include methods text for co2sys in lab report
+
+#How do we check our model performance? 
+#How do we plot our model predictions?
+
 ```
 
 For the markdown do:
