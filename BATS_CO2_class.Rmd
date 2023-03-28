@@ -95,15 +95,54 @@ view(bats_co2)
 
 # we now have In the data we have TA, DIC (CO2), S, T, PT, sit and pressure
 #What are the units of these and waht does co2sys need?
-#TA (uequiv) = umol/kg and we need mol/kg ****
+#TA (uequiv) = umol/kg and we need mol/kg **** 
+#=  Alk*10^-6
 #DIC = umol/kg, we need mol/kg *****
-#S = is Practical Salinity and we will use EOS80
+#= DIC*10^-6
+#S = is Practical Salinity and we will use EOS80 
+# Sal1
 #T = is in °C
+# Temp
 #Pt = umol/kg, we need mol/kg ******
-#siT = umol/kg, we need mol/kg *****
+# PO41*10^-6
+#si1 = umol/kg, we need mol/kg *****
+# Si1*10^-6
 #P_dbar = dbar, we need bar ********
+#P_dbar/10 or P_dbar*10^-1
 
 #We will need to convert units scaling when using co2sys
+#Flag 15 is alk and DIC
+
+bats_co2sys = bats_co2 %>%
+  filter(Alk!=-999, CO2!=-999, Sal1!=-999, Temp != -999, P_gsw_dbar!= -999, PO41!=-999, Si1!= -999) %>% 
+  rename(DIC=CO2) %>% 
+  mutate(carb(flag = 15, var1 = Alk*10^-6 , var2 = DIC*10^-6 , S=Sal1, 
+     T=Temp, Patm=1, P=P_gsw_dbar*10^-1, 
+     Pt=PO41*10^-6, Sit=Si1*10^-6, k1k2="l", 
+     kf="pf", ks="d", pHscale="T"
+     , b="u74", gas="potential", warn="y", 
+     eos="eos80", long=360-lonW, lat=latN))
+  view(bats_co2sys)
+  
+  
+#flter for only hte surface ocean(only the upper 200m)
+bats_co2sys_surface = bats_co2sys %>% 
+  filter(Depth<100)
+view(bats_co2sys_surface)
+
+
+bats_co2sys_surface %>% 
+  ggplot(aes(x = decy, y = pCO2insitu))+
+  geom_point()+
+  geom_line()
+
+bats_co2sys_surface %>% 
+  filter(pCO2insitu<200) %>% 
+  view()
+
+pco2_model = lm(pCO2insitu~decy, data = bats_co2sys_surface)
+summary(pco2_model)
+
 ```
 
 For the markdown do:
