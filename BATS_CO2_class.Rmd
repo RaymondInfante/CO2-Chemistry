@@ -9,6 +9,7 @@ output: html_document
 #Load Required packages
 library(tidyverse)
 library(seacarb)
+library(performance)
 
 #Import dataset
 #(2 dataset to column names)
@@ -70,10 +71,12 @@ Naneu  = Nanoeukaryotes (cells/ml)
 # Class questions
 Can we quantify ocean acidification in the subtropical North Atlantic Ocean
 
-1) Is surface ocean pco2 increasing?
+1) Is surface ocean pco2 increasing? # we did this in class
 2) Is surface ocean seawater ph decreasing?
 3) Is surface ocean seawater saturation state with respect to arragonite decreasing? 
 
+
+Question#1
 
 ```{r, echo=FALSE, message=FALSE, error=FALSE}
 ?carb
@@ -130,11 +133,15 @@ bats_co2sys_surface = bats_co2sys %>%
   filter(Depth<100)
 view(bats_co2sys_surface)
 
-
+#Plot pco2 vs decy
 bats_co2sys_surface %>% 
   ggplot(aes(x = decy, y = pCO2insitu))+
-  geom_point()+
-  geom_line()
+  geom_point(color = "#9d46bd", alpha = 0.3)+
+  geom_line(alpha = 0.7)+
+  theme_classic()+
+  scale_x_continuous(limits = c(1990,2020))+
+  labs(x = "Years", y = "pCO2", title = "pCO2 vs Years")+
+  geom_smooth(method = "lm", color = "#ed6b5a")
 
 bats_co2sys_surface %>% 
   filter(pCO2insitu<200) %>% 
@@ -142,15 +149,85 @@ bats_co2sys_surface %>%
 
 pco2_model = lm(pCO2insitu~decy, data = bats_co2sys_surface)
 summary(pco2_model)
+#for every year it passes. pCO2 increase by 1.85 microatmosphere
 
-#For Homework:
-#Make decy vs pco2 plot pretty
-#Could include methods text for co2sys in lab report
 
-#How do we check our model performance? 
+
+
+#Checking our model:
+
+pco2_model = lm(pCO2insitu~decy, data = bats_co2sys_surface)
+summary(pco2_model)
+anova(pco2_model)
+#for every year it passes. pCO2 increase by 1.85 micro atmospshere
+
+#Checking our models performance: Using the performance package.
+check_model(pco2_model)
+#model assumptions appear valid
+
+
 #How do we plot our model predictions?
+?predict
+#This way we need to rename the columns
+bats_co2sys_surface %>% 
+  mutate(predict(pco2_model, interval = "prediction", level = 0.95))
+
+
+#Base R method
+bats_co2sys_surface_predict = cbind(bats_co2sys_surface, predict(pco2_model, interval = "confidence", level = 0.95))
+
+bats_co2sys_surface_predict 
+
+#Add prediction line to ggplot
+bats_co2sys_surface_predict%>% 
+  ggplot()+
+  geom_point(mapping = aes(x = decy, y = pCO2insitu))+
+  geom_line(aes(x = decy, y = fit), color = "purple")+
+  geom_ribbon(aes(x = decy, ymin = lwr, ymax = upr), fill = "purple", alpha = 0.2)+
+  theme_classic()
+  
+#There is a seasonal cycle in surface ocean pCO2 at BATS with higher pCO2 observed in late summer, to early fall and lower pco2 observed in late winter and early spring. There is a consistent. detectable (ANOVA, p<0.0001) annual increase in pco2 by 1.85+-0.07 uatm/year.
+#Also show plot with model. The figure caption describes plot(points = data, line = model, shaded region = 95% confidence intervals.)
+
+#For assignment:
+#Put this graph cleaner.
+#and do question 2 and 3 (pH and Aragonite). 
+#for thursday
+#try to include maps
+
+
 
 ```
 
+Question #2
+```{r, echo=FALSE, message=FALSE, error=FALSE}
+
+
+
+
+
+```
+
+
+
+Question #3
+
+```{r}
+
+```
+
+
+For Homework:
+Make decy vs pco2 plot pretty
+Could include methods text for co2sys in lab report
+
+
+1) Is surface ocean pco2 increasing? # we did this in class
+2) Is surface ocean seawater ph decreasing?
+3) Is surface ocean seawater saturation state with respect to arragonite decreasing? 
+
+
 For the markdown do:
 Intro - methods - results - discussion mini-lab report
+
+
