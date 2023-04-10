@@ -1,0 +1,339 @@
+---
+title: "CO2 Assignment"
+author: "Raymond Infante"
+date: "2023-04-09"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+---
+
+```{r setup, include=FALSE, message=FALSE, echo=FALSE, error=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Packages used
+
+library(tidyverse)
+library(seacarb)
+library(performance)
+library(patchwork)
+library(ggmap)
+library(RColorBrewer)
+
+#calling in the data
+
+#Import dataset
+#(2 dataset to column names)
+bats_bottle <- read_table("bats_bottle.txt", 
+    col_names = FALSE, skip = 60)
+bats_bottle_names <- read_csv("bats_bottle.txt", 
+    skip = 59)
+#Combine column names
+colnames(bats_bottle) <- colnames(bats_bottle_names) 
+#Check if the data and columns are correct
+view(bats_bottle)
+view(bats_bottle_names)
+
+```
+
+
+```{r, include=FALSE, message=FALSE, echo=FALSE, error=FALSE}
+# Data Wrangling for question 1: Is surface ocean pco2 increasing?
+
+bats_co2 = bats_bottle %>% 
+  mutate(P_gsw_dbar = gsw_p_from_z(Depth*-1, latN))
+view(bats_co2)
+#we now have all of the variables that we need to calculate the surface water chemistry at the BATS station, but that we need to be very careful about our units. 
+
+# we now have In the data we have TA, DIC (CO2), S, T, PT, sit and pressure
+#What are the units of these and what does co2sys need?
+#TA (uequiv) = umol/kg and we need mol/kg **** 
+#=  Alk*10^-6
+#DIC = umol/kg, we need mol/kg *****
+#= DIC*10^-6
+#S = is Practical Salinity and we will use EOS80 
+# Sal1
+#T = is in °C
+# Temp
+#Pt = umol/kg, we need mol/kg ******
+# PO41*10^-6
+#si1 = umol/kg, we need mol/kg *****
+# Si1*10^-6
+#P_dbar = dbar, we need bar ********
+#P_dbar/10 or P_dbar*10^-1
+
+#We will need to convert units scaling when using co2sys
+#Flag 15 is alk and DIC
+
+bats_co2sys = bats_co2 %>%
+  filter(Alk!=-999, CO2!=-999, Sal1!=-999, Temp != -999, P_gsw_dbar!= -999, PO41!=-999, Si1!= -999) %>% 
+  rename(DIC=CO2) %>% 
+  mutate(carb(flag = 15, var1 = Alk*10^-6 , var2 = DIC*10^-6 , S=Sal1, 
+     T=Temp, Patm=1, P=P_gsw_dbar*10^-1, 
+     Pt=PO41*10^-6, Sit=Si1*10^-6, k1k2="l", 
+     kf="pf", ks="d", pHscale="T"
+     , b="u74", gas="potential", warn="y", 
+     eos="eos80", long=360-lonW, lat=latN))
+  view(bats_co2sys)
+
+bats_co2sys_surface = bats_co2sys %>% 
+  filter(Depth<100)
+view(bats_co2sys_surface)
+
+#Plot pco2 vs decy
+bats_co2sys_surface %>% 
+  ggplot(aes(x = decy, y = pCO2insitu))+
+  geom_point(color = "#9d46bd", alpha = 0.3)+
+  geom_line(alpha = 0.7)+
+  theme_classic()+
+  scale_x_continuous(limits = c(1990,2020))+
+  labs(x = "Years", y = "pCO2", title = "pCO2 vs Years in BATS Data")+
+  geom_smooth(method = "lm", color = "#ed6b5a")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+pco2_model = lm(pCO2insitu~decy, data = bats_co2sys_surface)
+summary(pco2_model)
+#for every year it passes. pCO2 increase by 1.85 microatmosphere
+check_model(pco2_model)
+
+bats_co2sys_surface %>% 
+  mutate(predict(pco2_model, interval = "prediction", level = 0.95))
+
+
+#Base R method
+bats_co2sys_surface_predict = cbind(bats_co2sys_surface, predict(pco2_model, interval = "confidence", level = 0.95))
+
+bats_co2sys_surface_predict 
+
+#Add prediction line to ggplot
+bats_co2sys_surface_predict%>% 
+  ggplot()+
+  geom_point(mapping = aes(x = decy, y = pCO2insitu))+
+  geom_line(aes(x = decy, y = fit), color = "purple")+
+  geom_ribbon(aes(x = decy, ymin = lwr, ymax = upr), fill = "purple", alpha = 0.2)+
+  theme_classic()
+
+
+
+```
+
+
+```{r, include=FALSE, message=FALSE, echo=FALSE, error=FALSE}
+# Data Wrangling for question 2: Is surface ocean seawater ph decreasing?
+#Use pH insteed of pCO2
+
+bats_co2sys_surface
+
+#Plot pH vs decy
+bats_co2sys_surface %>% 
+  ggplot(aes(x = decy, y = pH))+
+  geom_point(color = "#db723d", alpha = 0.3)+
+  geom_line(alpha = 0.7)+
+  theme_classic()+
+  scale_x_continuous(limits = c(1990,2020))+
+  labs(x = "Years", y = "pH", title = "pH vs Years on BATS Data")+
+  geom_smooth(method = "lm", color = "red")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+pH_model = lm(pH~decy, data = bats_co2sys_surface)
+summary(pH_model)
+#for every year it passes. pH decrease by 0.00176
+check_model(pH_model)
+
+```
+
+
+
+```{r, include=FALSE, message=FALSE, echo=FALSE, error=FALSE}
+#Data Wrangling for question 3: Is surface ocean seawater saturation state with respect to arragonite decreasing?
+#Use OmegaAragonite insteed of pCO2
+
+bats_co2sys_surface
+
+
+#Plot Omega Aragonite vs decy
+bats_co2sys_surface %>% 
+  ggplot(aes(x = decy, y = OmegaAragonite))+
+  geom_point(color = "#4287f5", alpha = 0.3)+
+  geom_line(alpha = 0.7)+
+  theme_classic()+
+  scale_x_continuous(limits = c(1990,2020))+
+  labs(x = "Years", y = expression(paste(Omega, "Aragonite")), title = "Aragonite vs Years in BATS Data")+
+  geom_smooth(method = "lm", color = "red")+
+    theme(plot.title = element_text(hjust = 0.5))
+
+Aragonite_model = lm(OmegaAragonite~decy, data = bats_co2sys_surface)
+summary(Aragonite_model)
+#for every year it passes. Aragonite dicrease by 0.0055852
+check_model(Aragonite_model)
+
+```
+
+```{r, include=FALSE, message=FALSE, echo=FALSE, error=FALSE}
+#Maps of place
+
+min(bats_co2sys_surface$latN)
+min(bats_co2sys_surface$lonW)
+bats_co2sys_surface
+
+bats_co2_group_decy = bats_co2sys_surface %>% 
+  mutate(year = substr(bats_co2sys_surface$yyyymmdd,1,4))
+bats_co2_group_decy
+
+ 
+
+register_google(key = "AIzaSyCN77uGdKAxmR71Xf4jinOnehFwkGnLBmM")
+
+satelite_map_points = ggmap(get_map(c(lon = -64.500, lat = 32.000), zoom = 9, maptype = "satellite"))+
+   geom_point(data = bats_co2_group_decy, aes(x = -lonW, y = latN, color = year), size = 2, alpha = 0.5)+
+  labs(title = "Fig. 3")
+satelite_map_points
+
+satelite_sumout = ggmap(get_map(c(lon = -64.500, lat = 32.000), zoom = 4, maptype = "satellite"))+ geom_segment(aes(x=-59, y=30, xend=-64, yend=32), arrow = arrow(length=unit(.5, 'cm')), color = "white")+
+  annotate(geom = "text", x = -57, y = 29, label = "BATS", hjust = "left", color = "white")+
+  labs(title = "Fig. 2")
+satelite_sumout
+ 
+                                                                                                satelite_sumout 
+                                                                                                
+satelite_map_points                                                                                                
+                                                                                                
+                                                                                                             
+                                                                                                              
+
+```
+
+
+
+Zeebe and Wolf-Gladrow, 2001
+
+# 1. Introduction 
+### 1.1 Ocean Acidification 
+Since the Industrial Revolution carbon dioxide concentrations in the atmosphere had increased due to burning fossil fuels and changes in land uses. According to [NASA](https://climate.nasa.gov/news/2915/the-atmosphere-getting-a-handle-on-carbon-dioxide/#:~:text=The%20concentration%20of%20carbon%20dioxide,it%20was%20near%20370%20ppm.) the concentration of CO2 is nearly 412ppm representing a 47% increase since the beginning of the industrial age. "Being one of the most important green house gases ater water vapor" (Zeebe and Wolf-Gladrow, 2001). This increase in atmospheric concentration can translate to an increase in the concentration of CO2 in the oceans. According to [NOAA](https://oceanservice.noaa.gov/facts/acidification.html#:~:text=Ocean%20acidification%20refers%20to%20a,CO2)%20from%20the%20atmosphere.) the ocean can absorb approximately 30% the CO2 in the atmosphere. 
+
+When CO2 enters the ocean surface it reacts with water forming carbonic acid, rapidly dropping a hydrogen, resulting in bicarbonate ion. This bicarbonate ion can further react with water dissociating as hydrogen ion and carbonate ion. This present a problem, as seen in figure 1, there should exist an equilibrium of this elements in the ocean, but that's not the case. While humans increase CO2 concentration in the atmosphere, more will be entering the oceans diverting the equilibrium in figure 1 to the left, lowering at the same time the pH in the ocean. 
+
+
+![Fig. 1. CO2 Reactions, retreived from: Zeebe and Wolf-Gladrow, 2001. This figure chose the reactions and equilibrium points od the CO2 reactions.](co2_reactions.png){width=60%}
+
+The decrease in pH in the ocean is defined as Ocean Acidification. According to [NOAA](https://www.noaa.gov/education/resource-collections/ocean-coasts/ocean-acidification), Ocean Acidification had been affecting the marine ecosystem. Specially organism that produce hard skeleton and shells. This shells are product of carbonate. As seen in figure 1, carbonate ions are on the far right side of the equilibrium chart. If the equilibrium is displaces to the left, pH will be lower, the Hydrogen ions produced in this CO2 reactions will react with the carbonate and this organism will lack of this product, increasing the possibility of not surviving. 
+
+Although most affected are the organism that uses carbonate ions, evidence according to [NOAA](https://www.noaa.gov/education/resource-collections/ocean-coasts/ocean-acidification) have shown that fishes, such as clown-fish, decrease the detection of predator in more acidic waters. The Ocean Acification is affecting every where and every one, that's why is important and imperative to study, monitor and work with it. 
+
+### 1.2 BATS
+The Bermuda Atlantic Time-Series study [BATS](https://bats.bios.edu/) is one of the worlds longest oceanographic data acquisition runned by the Bermuda Institute of Ocean Science. In this study we are using BATS bottle data to study Ocean Acidiciation, specifically answering the question if pCO2 is increasing, pH is decreasing and the saturation state of Aragonite is decreasing in the surface water. 
+
+BATS is located 631 miles, or 1,016Km northeast of the United State as seen in Figure 2.  
+The data obtained in this work is located aproximatly 170Km southeast of Bermuda as seen in figure 3. Data was obtained from 1991 - 2021. 
+```{r, echo=FALSE, warning=FALSE}
+satelite_sumout 
+satelite_map_points
+```
+
+
+# 2. Methods
+
+### 2.1 BATS
+The data obtain from BATS is open source and can be downloaded [here](https://bats.bios.edu/bats-data/). This data was obtained every year since 1991, approximately 170Km southeast of Bermuda. Several ships were used all this years: R/V Weatherbird I (cruises: 1,2,8,9,10,11, and 13), R/V Cape Henlopen (cruises: 3,4,5,6 and 7), R/V Cape Hatteras (cruises: 33,52,52a,53,53a,54,55,55a and 56), R/V Weatherbird II (cruises: 57-207), R/V Atlantic Explorer (cruises: 210-241 [242 was done by R/V Oceanus], 243-330), and R/V Endeavor (cruise 331) deploying Niskin bottles and CTD. 
+
+### 2.2 SeaCarb package
+
+Seacarb package (v3.3.1) was used in this work, specially the "carb" function. Using R programming language (R version 4.2.2).  This function returns parameter of seawater carbonate system such as: pH, pCO2, pCO2insitu, CO3 concentrations, DIC, Alkalinity and the saturation state of Aragonite and calcite. 
+
+The data was wrangle to obtain the necessary parameter for the "carb" function arguments specially the pCO2, pH and Saturation State of Aragonite. This were Plot and a linear model was used to observe the increase or decrease rate of the parameters. 
+
+# 3. Results
+
+### 3.1 pCO2 Increase
+```{r, echo=FALSE, warning=FALSE}
+bats_co2sys_surface %>% 
+  ggplot(aes(x = decy, y = pCO2insitu))+
+  geom_point(color = "#9d46bd", alpha = 0.3)+
+  geom_line(alpha = 0.7)+
+  theme_classic()+
+  scale_x_continuous(limits = c(1990,2020))+
+  labs(x = "Years", y = "pCO2", title = "Fig. 4. pCO2 vs Years in BATS Data")+
+  geom_smooth(method = "lm", color = "#ed6b5a")+
+  annotate(geom = "text", x = 1995, y = 500, label  = "pCO2 = 1.85 (year) + -3.361e+03")+annotate(geom = "text", x = 1995, y = 450, label  = "(p < 0.001)")
+
+pco2_model = lm(pCO2insitu~decy, data = bats_co2sys_surface)
+summary(pco2_model)
+#for every year it passes. pCO2 increase by 1.85 microatmosphere
+check_model(pco2_model)
+
+
+```
+```{r,echo=FALSE, warning=FALSE}
+#Modelling pCO2
+
+bats_co2sys_surface %>% 
+  mutate(predict(pco2_model, interval = "prediction", level = 0.95))
+
+
+#Base R method
+bats_co2sys_surface_predict = cbind(bats_co2sys_surface, predict(pco2_model, interval = "confidence", level = 0.95))
+
+bats_co2sys_surface_predict 
+
+#Add prediction line to ggplot
+bats_co2sys_surface_predict%>% 
+  ggplot()+
+  geom_point(mapping = aes(x = decy, y = pCO2insitu))+
+  geom_line(aes(x = decy, y = fit), color = "purple")+
+  geom_ribbon(aes(x = decy, ymin = lwr, ymax = upr), fill = "purple", alpha = 0.2)+
+  theme_classic()
+
+
+```
+
+by Travis
+There is a seasonal cycle in surface ocean pCO2 at BATS with higher pCO2 observed in late summer, to early fall and lower pco2 observed in late winter and early spring. There is a consistent. detectable (ANOVA, p<0.0001) annual increase in pco2 by 1.85+-0.07 uatm/year.
+Also show plot with model. The figure caption describes plot(points = data, line = model, shaded region = 95% confidence intervals.)
+
+
+### 3.2 pH Decreasing
+
+```{r, echo=FALSE, warning=FALSE}
+bats_co2sys_surface %>% 
+  ggplot(aes(x = decy, y = pH))+
+  geom_point(color = "#db723d", alpha = 0.3)+
+  geom_line(alpha = 0.7)+
+  theme_classic()+
+  scale_x_continuous(limits = c(1990,2020))+
+  labs(x = "Years", y = "pH", title = "pH vs Years on BATS Data")+
+  geom_smooth(method = "lm", color = "red")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+pH_model = lm(pH~decy, data = bats_co2sys_surface)
+summary(pH_model)
+#for every year it passes. pH decrease by 0.00176
+check_model(pH_model)
+```
+
+
+### 3.3 Saturation State of Aragonite Decreasing
+
+```{r, echo=FALSE, warning=FALSE}
+bats_co2sys_surface %>% 
+  ggplot(aes(x = decy, y = OmegaAragonite))+
+  geom_point(color = "#4287f5", alpha = 0.3)+
+  geom_line(alpha = 0.7)+
+  theme_classic()+
+  scale_x_continuous(limits = c(1990,2020))+
+  labs(x = "Years", y = expression(paste(Omega, "Aragonite")), title = "Aragonite vs Years in BATS Data")+
+  geom_smooth(method = "lm", color = "red")+
+    theme(plot.title = element_text(hjust = 0.5))
+
+Aragonite_model = lm(OmegaAragonite~decy, data = bats_co2sys_surface)
+summary(Aragonite_model)
+#for every year it passes. Aragonite dicrease by 0.0055852
+check_model(Aragonite_model)
+```
+
+
+
+
+
+
+
+# 4. Discussion 
